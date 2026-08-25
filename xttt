@@ -1,0 +1,147 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Защита от повторного запуска
+local TargetGui = LocalPlayer:WaitForChild("PlayerGui")
+if TargetGui:FindFirstChild("CutJungleFarm") then
+    TargetGui.CutJungleFarm:Destroy()
+end
+
+-- Переменные состояния
+local farmActive = false
+local savedCFrame = nil
+local targetWins = 10 -- Количество побед по умолчанию
+local currentWins = 0
+
+-- Создаем интерфейс
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CutJungleFarm"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = TargetGui
+
+-- Главный контейнер (Компактный)
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 160, 0, 150)
+Frame.Position = UDim2.new(0.05, 0, 0.3, 0)
+Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Frame.BorderSizePixel = 1
+Frame.BorderColor3 = Color3.fromRGB(80, 80, 80)
+Frame.Active = true
+Frame.Draggable = true -- Можно двигать пальцем
+Frame.Parent = ScreenGui
+
+-- 1. Кнопка "Set Finish" (Запомнить финиш)
+local SetBtn = Instance.new("TextButton")
+SetBtn.Size = UDim2.new(0.9, 0, 0, 30)
+SetBtn.Position = UDim2.new(0.05, 0, 0.06, 0)
+SetBtn.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
+SetBtn.Text = "1. Сохранить Финиш"
+SetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SetBtn.Font = Enum.Font.SourceSansBold
+SetBtn.TextSize = 13
+SetBtn.Parent = Frame
+
+-- 2. Ввод количества побед
+local WinsInput = Instance.new("TextBox")
+WinsInput.Size = UDim2.new(0.9, 0, 0, 25)
+WinsInput.Position = UDim2.new(0.05, 0, 0.3, 0)
+WinsInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+WinsInput.Text = "10"
+WinsInput.PlaceholderText = "Кол-во побед"
+WinsInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+WinsInput.Font = Enum.Font.SourceSans
+WinsInput.TextSize = 14
+WinsInput.Parent = Frame
+
+-- 3. Кнопка Старт/Стоп
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Size = UDim2.new(0.9, 0, 0, 35)
+ToggleBtn.Position = UDim2.new(0.05, 0, 0.52, 0)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+ToggleBtn.Text = "Старт Фарм"
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.Font = Enum.Font.SourceSansBold
+ToggleBtn.TextSize = 15
+ToggleBtn.Parent = Frame
+
+-- 4. Текст статуса
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(0.9, 0, 0, 20)
+StatusLabel.Position = UDim2.new(0.05, 0, 0.82, 0)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "Победы: 0 / 10"
+StatusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+StatusLabel.Font = Enum.Font.SourceSans
+StatusLabel.TextSize = 12
+StatusLabel.Parent = Frame
+
+-- Логика сохранения точки финиша
+SetBtn.MouseButton1Click:Connect(function()
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if root then
+        savedCFrame = root.CFrame
+        SetBtn.Text = "Точка сохранена!"
+        SetBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
+        task.wait(1.5)
+        SetBtn.Text = "Обновить точку"
+    end
+end)
+
+-- Обновление лимита побед из поля ввода
+WinsInput.FocusLost:Connect(function()
+    local num = tonumber(WinsInput.Text)
+    if num and num > 0 then
+        targetWins = num
+        StatusLabel.Text = "Победы: " .. currentWins .. " / " .. targetWins
+    else
+        WinsInput.Text = tostring(targetWins)
+    end
+end)
+
+-- Логика кнопки Старт/Стоп
+ToggleBtn.MouseButton1Click:Connect(function()
+    if not savedCFrame and not farmActive then
+        ToggleBtn.Text = "Сначала сохраните!"
+        task.wait(1)
+        ToggleBtn.Text = "Старт Фарм"
+        return
+    end
+
+    farmActive = not farmActive
+    if farmActive then
+        currentWins = 0
+        ToggleBtn.Text = "СТОП"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
+    else
+        ToggleBtn.Text = "Старт Фарм"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    end
+end)
+
+-- Цикл фарминга
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if farmActive and savedCFrame then
+            local char = LocalPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            
+            if root then
+                -- ТП на финиш
+                root.CFrame = savedCFrame
+                currentWins = currentWins + 1
+                StatusLabel.Text = "Победы: " .. currentWins .. " / " .. targetWins
+                
+                -- Если собрали нужное кол-во — выключаем
+                if currentWins >= targetWins then
+                    farmActive = false
+                    ToggleBtn.Text = "ГОТОВО!"
+                    ToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+                    task.wait(2)
+                    ToggleBtn.Text = "Старт Фарм"
+                end
+            end
+        end
+    end
+end)
