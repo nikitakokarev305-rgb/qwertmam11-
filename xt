@@ -1,0 +1,106 @@
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local LocalPlayer = Players.LocalPlayer
+
+local autoFarmActive = false
+
+-- Удаляем старый GUI, если он существует
+if CoreGui:FindFirstChild("SimpleFarmGui") then
+    CoreGui.SimpleFarmGui:Destroy()
+end
+
+-- Создаем GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SimpleFarmGui"
+ScreenGui.ResetOnSpawn = false
+
+-- Безопасное добавление в интерфейс
+if gethui then
+    ScreenGui.Parent = gethui()
+elseif syn and syn.protect_gui then
+    syn.protect_gui(ScreenGui)
+    ScreenGui.Parent = CoreGui
+else
+    ScreenGui.Parent = CoreGui
+end
+
+-- Кнопка (Сразу кнопка, без лишних фреймов)
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Name = "FarmButton"
+ToggleButton.Size = UDim2.new(0, 120, 0, 50)
+ToggleButton.Position = UDim2.new(0.05, 0, 0.3, 0)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+ToggleButton.BorderSizePixel = 2
+ToggleButton.BorderColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.Text = "FARM: OFF"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 70, 70)
+ToggleButton.TextSize = 18
+ToggleButton.Font = Enum.Font.SourceSansBold
+ToggleButton.Active = true
+ToggleButton.Draggable = true -- Перетаскивается по экрану
+ToggleButton.Parent = ScreenGui
+
+-- Поиск блока победы (TouchInterest или имя)
+local function getWinPart()
+    -- 1. Ищем TouchInterest (триггер касания) в Workspace
+    for _, item in ipairs(workspace:GetDescendants()) do
+        if item:IsA("TouchTransmitter") then
+            local parent = item.Parent
+            if parent and parent:IsA("BasePart") then
+                local pName = parent.Name:lower()
+                if pName:find("win") or pName:find("finish") or pName:find("end") or pName:find("reward") then
+                    return parent
+                end
+            end
+        end
+    end
+    
+    -- 2. Если не нашли по имени, берем любой объект с именем Win/Finish
+    for _, item in ipairs(workspace:GetDescendants()) do
+        if item:IsA("BasePart") then
+            local pName = item.Name:lower()
+            if pName:find("win") or pName:find("finish") or pName:find("end") then
+                return item
+            end
+        end
+    end
+    return nil
+end
+
+-- Цикл фарма
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        if autoFarmActive then
+            local char = LocalPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            
+            if root then
+                local target = getWinPart()
+                if target then
+                    -- Телепорт
+                    root.CFrame = target.CFrame + Vector3.new(0, 2, 0)
+                    
+                    -- Симуляция касания (для надежности)
+                    firetouchinterest(root, target, 0)
+                    task.wait(0.1)
+                    firetouchinterest(root, target, 1)
+                end
+            end
+        end
+    end
+end)
+
+-- Логика нажатия
+ToggleButton.MouseButton1Click:Connect(function()
+    autoFarmActive = not autoFarmActive
+    if autoFarmActive then
+        ToggleButton.Text = "FARM: ON"
+        ToggleButton.TextColor3 = Color3.fromRGB(70, 255, 70)
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(20, 50, 20)
+    else
+        ToggleButton.Text = "FARM: OFF"
+        ToggleButton.TextColor3 = Color3.fromRGB(255, 70, 70)
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    end
+end)
