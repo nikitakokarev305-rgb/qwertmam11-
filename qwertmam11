@@ -1,0 +1,98 @@
+-- Службы Roblox
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+local autoFarmActive = false
+
+-- Создание минималистичного GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AutoFarmMobileGUI"
+ScreenGui.ResetOnSpawn = false
+
+-- Защита от обнаружения интерфейса (если поддерживает инжектор)
+if syn and syn.protect_gui then
+    syn.protect_gui(ScreenGui)
+    ScreenGui.Parent = CoreGui
+elseif gethui then
+    ScreenGui.Parent = gethui()
+else
+    ScreenGui.Parent = CoreGui
+end
+
+-- Главная кнопка (компактная для мобилок)
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 130, 0, 45)
+MainFrame.Position = UDim2.new(0.02, 0, 0.4, 0) -- В левой части экрана
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true -- Можно перетаскивать по экрану
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim2.new(0, 8)
+UICorner.Parent = MainFrame
+
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Name = "ToggleButton"
+ToggleButton.Size = UDim2.new(1, -10, 1, -10)
+ToggleButton.Position = UDim2.new(0, 5, 0, 5)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+ToggleButton.Text = "Farm: OFF"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 65, 65)
+ToggleButton.Font = Enum.Font.SourceSansBold
+ToggleButton.TextSize = 16
+ToggleButton.Parent = MainFrame
+
+local BtnCorner = Instance.new("UICorner")
+BtnCorner.CornerRadius = UDim2.new(0, 6)
+BtnCorner.Parent = ToggleButton
+
+-- Функция поиска зоны победы/финиша
+local function getWinZone()
+    -- Распространенные названия блоков победы в подобных Obby/Escape играх
+    local possibleNames = {"Win", "WinZone", "Finish", "End", "Reward", "GiveWin", "WinTouch"}
+    
+    for _, name in ipairs(possibleNames) do
+        local obj = workspace:FindFirstChild(name, true)
+        if obj and obj:IsA("BasePart") then
+            return obj
+        end
+    end
+    return nil
+end
+
+-- Логика автофарма
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if autoFarmActive then
+            local character = LocalPlayer.Character
+            if character and character:FindFirstChild("HumanoidRootPart") then
+                local winPart = getWinZone()
+                if winPart then
+                    -- Телепорт к зоне победы
+                    character.HumanoidRootPart.CFrame = winPart.CFrame + Vector3.new(0, 3, 0)
+                else
+                    -- Если зона не найдена по имени, пытаемся найти самый дальний триггер
+                    warn("Зона победы не найдена автоматически. Проверьте название блока в игре.")
+                end
+            end
+        end
+    end
+end)
+
+-- Переключение кнопки
+ToggleButton.MouseButton1Click:Connect(function()
+    autoFarmActive = not autoFarmActive
+    if autoFarmActive then
+        ToggleButton.Text = "Farm: ON"
+        ToggleButton.TextColor3 = Color3.fromRGB(65, 255, 65)
+    else
+        ToggleButton.Text = "Farm: OFF"
+        ToggleButton.TextColor3 = Color3.fromRGB(255, 65, 65)
+    end
+end)
