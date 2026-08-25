@@ -1,0 +1,88 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Безопасный выбор контейнера для GUI (совместимость со всеми инжекторами)
+local TargetGui = LocalPlayer:WaitForChild("PlayerGui")
+if gethui then
+    TargetGui = gethui()
+elseif game:GetService("CoreGui"):FindFirstChild("RobloxGui") then
+    TargetGui = game:GetService("CoreGui")
+end
+
+-- Очистка старой кнопки
+if TargetGui:FindFirstChild("MobileFarmGui") then
+    TargetGui.MobileFarmGui:Destroy()
+end
+
+-- Создаем интерфейс
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MobileFarmGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = TargetGui
+
+local Button = Instance.new("TextButton")
+Button.Name = "FarmBtn"
+Button.Size = UDim2.new(0, 110, 0, 45)
+Button.Position = UDim2.new(0.05, 0, 0.4, 0)
+Button.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+Button.BorderColor3 = Color3.fromRGB(255, 255, 255)
+Button.BorderSizePixel = 2
+Button.Text = "FARM: OFF"
+Button.TextColor3 = Color3.fromRGB(255, 60, 60)
+Button.TextSize = 16
+Button.Font = Enum.Font.SourceSansBold
+Button.Active = true
+Button.Draggable = true
+Button.Parent = ScreenGui
+
+local active = false
+
+-- Быстрый поиск финиша без лагов
+local function findWin()
+    -- Проверка популярных имен в корне workspace
+    for _, name in ipairs({"Win", "Finish", "End", "WinZone", "GiveWin", "Reward"}) do
+        local obj = workspace:FindFirstChild(name, true)
+        if obj and obj:IsA("BasePart") then
+            return obj
+        end
+    end
+    return nil
+end
+
+-- Логика нажатия
+Button.MouseButton1Click:Connect(function()
+    active = not active
+    if active then
+        Button.Text = "FARM: ON"
+        Button.TextColor3 = Color3.fromRGB(60, 255, 60)
+    else
+        Button.Text = "FARM: OFF"
+        Button.TextColor3 = Color3.fromRGB(255, 60, 60)
+    end
+end)
+
+-- Основной цикл телепорта
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if active then
+            local pcallSuccess = pcall(function()
+                local char = LocalPlayer.Character
+                local root = char and char:FindFirstChild("HumanoidRootPart")
+                if root then
+                    local target = findWin()
+                    if target then
+                        root.CFrame = target.CFrame + Vector3.new(0, 3, 0)
+                        
+                        -- Безопасная симуляция касания
+                        if firetouchinterest then
+                            firetouchinterest(root, target, 0)
+                            task.wait(0.05)
+                            firetouchinterest(root, target, 1)
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
