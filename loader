@@ -1,0 +1,377 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+-- Очистка старого интерфейса
+local TargetGui = LocalPlayer:WaitForChild("PlayerGui")
+if TargetGui:FindFirstChild("CutJungleFarmV7") then
+    TargetGui.CutJungleFarmV7:Destroy()
+end
+
+-- Переменные состояния
+local farmActive = false
+local rebirthActive = false
+local flyActive = false
+local savedCFrame = nil
+local targetWins = 10
+local startWins = 0
+local customSpeed = 16
+local customJump = 50
+local flySpeed = 50
+local isMinimized = false
+
+local flyConnection = nil
+local bv, bg
+
+-- Поиск функции Rebirth
+local function triggerRebirth()
+    for _, item in ipairs(ReplicatedStorage:GetDescendants()) do
+        if item:IsA("RemoteEvent") or item:IsA("RemoteFunction") then
+            local name = item.Name:lower()
+            if name:find("rebirth") or name:find("reborn") then
+                if item:IsA("RemoteEvent") then
+                    item:FireServer()
+                elseif item:IsA("RemoteFunction") then
+                    item:InvokeServer()
+                end
+            end
+        end
+    end
+end
+
+-- Получение побед локального игрока
+local function getPlayerWins()
+    local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
+    if leaderstats then
+        for _, stat in ipairs(leaderstats:GetChildren()) do
+            local name = stat.Name:lower()
+            if name:find("win") or name:find("победы") then
+                return stat.Value
+            end
+        end
+    end
+    return 0
+end
+
+-- Функция просмотра всемирного лидерборда побед
+local function showGlobalLeaderboard()
+    print("=== ТОП ИГРОКОВ ПО ПОБЕДАМ ===")
+    local allPlayers = Players:GetPlayers()
+    
+    table.sort(allPlayers, function(a, b)
+        local winsA, winsB = 0, 0
+        local lsA = a:FindFirstChild("leaderstats")
+        local lsB = b:FindFirstChild("leaderstats")
+        
+        if lsA then
+            for _, stat in ipairs(lsA:GetChildren()) do
+                if stat.Name:lower():find("win") or stat.Name:lower():find("победы") then winsA = stat.Value end
+            end
+        end
+        if lsB then
+            for _, stat in ipairs(lsB:GetChildren()) do
+                if stat.Name:lower():find("win") or stat.Name:lower():find("победы") then winsB = stat.Value end
+            end
+        end
+        return winsA > winsB
+    end)
+
+    for i, p in ipairs(allPlayers) do
+        if i <= 10 then
+            local w = 0
+            local ls = p:FindFirstChild("leaderstats")
+            if ls then
+                for _, stat in ipairs(ls:GetChildren()) do
+                    if stat.Name:lower():find("win") or stat.Name:lower():find("победы") then w = stat.Value end
+                end
+            end
+            print(i .. ". " .. p.Name .. " — Побед: " .. w)
+        end
+    end
+    print("================================")
+end
+
+-- Функция полета
+local function toggleFly(state)
+    local char = LocalPlayer.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not root or not hum then return end
+
+    if state then
+        hum.PlatformStand = true
+        bv = Instance.new("BodyVelocity")
+        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        bv.Velocity = Vector3.new(0, 0, 0)
+        bv.Parent = root
+
+        bg = Instance.new("BodyGyro")
+        bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+        bg.CFrame = root.CFrame
+        bg.Parent = root
+
+        flyConnection = RunService.RenderStepped:Connect(function()
+            if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
+            local cam = workspace.CurrentCamera
+            local moveDir = hum.MoveDirection
+            
+            if moveDir.Magnitude > 0 then
+                bv.Velocity = cam.CFrame.LookVector * (moveDir.Z * flySpeed) + cam.CFrame.RightVector * (moveDir.X * flySpeed) + Vector3.new(0, moveDir.Y * flySpeed, 0)
+            else
+                bv.Velocity = Vector3.new(0, 0, 0)
+            end
+            bg.CFrame = cam.CFrame
+        end)
+    else
+        hum.PlatformStand = false
+        if bv then bv:Destroy() end
+        if bg then bg:Destroy() end
+        if flyConnection then flyConnection:Disconnect() end
+    end
+end
+
+-- Создание GUI (Ширина увеличена до 190 пикселей)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CutJungleFarmV7"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = TargetGui
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 190, 0, 410)
+Frame.Position = UDim2.new(0.05, 0, 0.15, 0)
+Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Frame.BorderColor3 = Color3.fromRGB(100, 100, 100)
+Frame.BorderSizePixel = 1
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+-- Верхняя панель
+local TopBar = Instance.new("Frame")
+TopBar.Size = UDim2.new(1, 0, 0, 26)
+TopBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+TopBar.BorderSizePixel = 0
+TopBar.Parent = Frame
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(0.7, 0, 1, 0)
+TitleLabel.Position = UDim2.new(0.05, 0, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "Cut Jungle Farm"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.Font = Enum.Font.SourceSansBold
+TitleLabel.TextSize = 13
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = TopBar
+
+local MinimizeBtn = Instance.new("TextButton")
+MinimizeBtn.Size = UDim2.new(0, 26, 0, 26)
+MinimizeBtn.Position = UDim2.new(1, -26, 0, 0)
+MinimizeBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+MinimizeBtn.Text = "-"
+MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizeBtn.Font = Enum.Font.SourceSansBold
+MinimizeBtn.TextSize = 15
+MinimizeBtn.Parent = TopBar
+
+local function createUIElement(instanceType, properties)
+    local obj = Instance.new(instanceType)
+    for prop, val in pairs(properties) do
+        obj[prop] = val
+    end
+    obj.Parent = Frame
+    return obj
+end
+
+-- Элементы управления (адаптированы под новый размер)
+local SetBtn = createUIElement("TextButton", {
+    Size = UDim2.new(0.9, 0, 0, 28), Position = UDim2.new(0.05, 0, 0.08, 0),
+    BackgroundColor3 = Color3.fromRGB(255, 140, 0), Text = "1. Сохранить Финиш", TextColor3 = Color3.fromRGB(255, 255, 255), Font = Enum.Font.SourceSansBold, TextSize = 13
+})
+
+local WinsInput = createUIElement("TextBox", {
+    Size = UDim2.new(0.9, 0, 0, 26), Position = UDim2.new(0.05, 0, 0.16, 0),
+    BackgroundColor3 = Color3.fromRGB(40, 40, 40), Text = "10", PlaceholderText = "Кол-во побед", TextColor3 = Color3.fromRGB(255, 255, 255), Font = Enum.Font.SourceSans, TextSize = 13
+})
+
+local SpeedInput = createUIElement("TextBox", {
+    Size = UDim2.new(0.9, 0, 0, 26), Position = UDim2.new(0.05, 0, 0.24, 0),
+    BackgroundColor3 = Color3.fromRGB(40, 40, 40), Text = "16", PlaceholderText = "Скорость бега", TextColor3 = Color3.fromRGB(255, 255, 255), Font = Enum.Font.SourceSans, TextSize = 13
+})
+
+local JumpInput = createUIElement("TextBox", {
+    Size = UDim2.new(0.9, 0, 0, 26), Position = UDim2.new(0.05, 0, 0.32, 0),
+    BackgroundColor3 = Color3.fromRGB(40, 40, 40), Text = "50", PlaceholderText = "Прыжок", TextColor3 = Color3.fromRGB(255, 255, 255), Font = Enum.Font.SourceSans, TextSize = 13
+})
+
+local FlySpeedInput = createUIElement("TextBox", {
+    Size = UDim2.new(0.9, 0, 0, 26), Position = UDim2.new(0.05, 0, 0.40, 0),
+    BackgroundColor3 = Color3.fromRGB(40, 40, 40), Text = "50", PlaceholderText = "Скорость полета", TextColor3 = Color3.fromRGB(255, 255, 255), Font = Enum.Font.SourceSans, TextSize = 13
+})
+
+local FlyBtn = createUIElement("TextButton", {
+    Size = UDim2.new(0.9, 0, 0, 28), Position = UDim2.new(0.05, 0, 0.49, 0),
+    BackgroundColor3 = Color3.fromRGB(40, 100, 180), Text = "Полет: ВЫКЛ", TextColor3 = Color3.fromRGB(255, 255, 255), Font = Enum.Font.SourceSansBold, TextSize = 13
+})
+
+local RebirthBtn = createUIElement("TextButton", {
+    Size = UDim2.new(0.9, 0, 0, 28), Position = UDim2.new(0.05, 0, 0.58, 0),
+    BackgroundColor3 = Color3.fromRGB(100, 40, 180), Text = "Авто-Реберт: ВЫКЛ", TextColor3 = Color3.fromRGB(255, 255, 255), Font = Enum.Font.SourceSansBold, TextSize = 13
+})
+
+local ToggleBtn = createUIElement("TextButton", {
+    Size = UDim2.new(0.9, 0, 0, 32), Position = UDim2.new(0.05, 0, 0.68, 0),
+    BackgroundColor3 = Color3.fromRGB(180, 40, 40), Text = "Старт Фарм", TextColor3 = Color3.fromRGB(255, 255, 255), Font = Enum.Font.SourceSansBold, TextSize = 14
+})
+
+local TopListBtn = createUIElement("TextButton", {
+    Size = UDim2.new(0.9, 0, 0, 28), Position = UDim2.new(0.05, 0, 0.79, 0),
+    BackgroundColor3 = Color3.fromRGB(40, 140, 40), Text = "Топ Побед (В консоль)", TextColor3 = Color3.fromRGB(255, 255, 255), Font = Enum.Font.SourceSansBold, TextSize = 12
+})
+
+local StatusLabel = createUIElement("TextLabel", {
+    Size = UDim2.new(0.9, 0, 0, 22), Position = UDim2.new(0.05, 0, 0.89, 0),
+    BackgroundTransparency = 1, Text = "Собрано: 0 / 10", TextColor3 = Color3.fromRGB(180, 180, 180), Font = Enum.Font.SourceSans, TextSize = 12
+})
+
+local elementsToHide = {SetBtn, WinsInput, SpeedInput, JumpInput, FlySpeedInput, FlyBtn, RebirthBtn, ToggleBtn, TopListBtn, StatusLabel}
+
+-- Сворачивание в квадрат
+MinimizeBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    if isMinimized then
+        Frame.Size = UDim2.new(0, 110, 0, 26)
+        TitleLabel.Visible = false
+        MinimizeBtn.Size = UDim2.new(1, 0, 1, 0)
+        MinimizeBtn.Position = UDim2.new(0, 0, 0, 0)
+        MinimizeBtn.Text = "GUI"
+        MinimizeBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        for _, elem in ipairs(elementsToHide) do elem.Visible = false end
+    else
+        Frame.Size = UDim2.new(0, 190, 0, 410)
+        TitleLabel.Visible = true
+        MinimizeBtn.Size = UDim2.new(0, 26, 0, 26)
+        MinimizeBtn.Position = UDim2.new(1, -26, 0, 0)
+        MinimizeBtn.Text = "-"
+        MinimizeBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+        for _, elem in ipairs(elementsToHide) do elem.Visible = true end
+    end
+end)
+
+-- Обработка кнопок
+SetBtn.MouseButton1Click:Connect(function()
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if root then
+        savedCFrame = root.CFrame
+        SetBtn.Text = "Финиш сохранен!"
+        SetBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
+        task.wait(1.5)
+        SetBtn.Text = "Обновить точку"
+    end
+end)
+
+WinsInput.FocusLost:Connect(function() local num = tonumber(WinsInput.Text) if num and num > 0 then targetWins = num else WinsInput.Text = tostring(targetWins) end end)
+SpeedInput.FocusLost:Connect(function() local num = tonumber(SpeedInput.Text) if num then customSpeed = num end end)
+JumpInput.FocusLost:Connect(function() local num = tonumber(JumpInput.Text) if num then customJump = num end end)
+FlySpeedInput.FocusLost:Connect(function() local num = tonumber(FlySpeedInput.Text) if num then flySpeed = num end end)
+
+FlyBtn.MouseButton1Click:Connect(function()
+    flyActive = not flyActive
+    toggleFly(flyActive)
+    if flyActive then
+        FlyBtn.Text = "Полет: ВКЛ"
+        FlyBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
+    else
+        FlyBtn.Text = "Полет: ВЫКЛ"
+        FlyBtn.BackgroundColor3 = Color3.fromRGB(40, 100, 180)
+    end
+end)
+
+RebirthBtn.MouseButton1Click:Connect(function()
+    rebirthActive = not rebirthActive
+    if rebirthActive then
+        RebirthBtn.Text = "Авто-Реберт: ВКЛ"
+        RebirthBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
+    else
+        RebirthBtn.Text = "Авто-Реберт: ВЫКЛ"
+        RebirthBtn.BackgroundColor3 = Color3.fromRGB(100, 40, 180)
+    end
+end)
+
+TopListBtn.MouseButton1Click:Connect(function()
+    showGlobalLeaderboard()
+    TopListBtn.Text = "Топ выведен в консоль"
+    task.wait(2)
+    TopListBtn.Text = "Топ Побед (В консоль)"
+end)
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    if not savedCFrame and not farmActive then
+        ToggleBtn.Text = "Сохрани финиш!"
+        task.wait(1.2)
+        ToggleBtn.Text = "Старт Фарм"
+        return
+    end
+
+    farmActive = not farmActive
+    if farmActive then
+        startWins = getPlayerWins()
+        ToggleBtn.Text = "СТОП"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
+    else
+        ToggleBtn.Text = "Старт Фарм"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    end
+end)
+
+-- Основной цикл (Скорость, Прыжок, Фарм)
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        local char = LocalPlayer.Character
+        if char then
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            if humanoid and not flyActive then
+                pcall(function()
+                    humanoid.WalkSpeed = customSpeed
+                    if humanoid.UseJumpPower then
+                        humanoid.JumpPower = customJump
+                    else
+                        humanoid.JumpHeight = customJump / 5
+                    end
+                end)
+            end
+        end
+
+        if farmActive and savedCFrame then
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if root then
+                root.CFrame = savedCFrame
+                local currentTotal = getPlayerWins()
+                local gained = currentTotal - startWins
+                if gained < 0 then gained = 0 end
+                
+                StatusLabel.Text = "Собрано: " .. gained .. " / " .. targetWins
+                
+                if gained >= targetWins then
+                    farmActive = false
+                    ToggleBtn.Text = "ГОТОВО!"
+                    ToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+                    task.wait(2)
+                    ToggleBtn.Text = "Старт Фарм"
+                end
+            end
+        end
+    end
+end)
+
+-- Цикл реберта
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if rebirthActive then triggerRebirth() end
+    end
+end)
