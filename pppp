@@ -1,0 +1,319 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+-- Очистка старого интерфейса
+local TargetGui = LocalPlayer:WaitForChild("PlayerGui")
+if TargetGui:FindFirstChild("CutJungleFarmV5") then
+    TargetGui.CutJungleFarmV5:Destroy()
+end
+
+-- Переменные состояния
+local farmActive = false
+local rebirthActive = false
+local savedCFrame = nil
+local targetWins = 10
+local startWins = 0
+local customSpeed = 16
+local customJump = 50
+local isMinimized = false
+
+-- Поиск функции Rebirth
+local function triggerRebirth()
+    for _, item in ipairs(ReplicatedStorage:GetDescendants()) do
+        if item:IsA("RemoteEvent") or item:IsA("RemoteFunction") then
+            local name = item.Name:lower()
+            if name:find("rebirth") or name:find("reborn") then
+                if item:IsA("RemoteEvent") then
+                    item:FireServer()
+                elseif item:IsA("RemoteFunction") then
+                    item:InvokeServer()
+                end
+            end
+        end
+    end
+end
+
+-- Получение побед из leaderstats
+local function getPlayerWins()
+    local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
+    if leaderstats then
+        for _, stat in ipairs(leaderstats:GetChildren()) do
+            local name = stat.Name:lower()
+            if name:find("win") or name:find("победы") then
+                return stat.Value
+            end
+        end
+    end
+    return 0
+end
+
+-- Создание GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CutJungleFarmV5"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = TargetGui
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 160, 0, 275)
+Frame.Position = UDim2.new(0.05, 0, 0.2, 0)
+Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Frame.BorderColor3 = Color3.fromRGB(100, 100, 100)
+Frame.BorderSizePixel = 1
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+-- Верхняя панель
+local TopBar = Instance.new("Frame")
+TopBar.Size = UDim2.new(1, 0, 0, 24)
+TopBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+TopBar.BorderSizePixel = 0
+TopBar.Parent = Frame
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(0.7, 0, 1, 0)
+TitleLabel.Position = UDim2.new(0.05, 0, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "Cut Jungle Farm"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.Font = Enum.Font.SourceSansBold
+TitleLabel.TextSize = 12
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = TopBar
+
+-- Кнопка Сворачивания в квадрат / Разворачивания
+local MinimizeBtn = Instance.new("TextButton")
+MinimizeBtn.Size = UDim2.new(0, 24, 0, 24)
+MinimizeBtn.Position = UDim2.new(1, -24, 0, 0)
+MinimizeBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+MinimizeBtn.Text = "-"
+MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizeBtn.Font = Enum.Font.SourceSansBold
+MinimizeBtn.TextSize = 14
+MinimizeBtn.Parent = TopBar
+
+-- Функция создания элементов интерфейса
+local function createUIElement(instanceType, properties)
+    local obj = Instance.new(instanceType)
+    for prop, val in pairs(properties) do
+        obj[prop] = val
+    end
+    obj.Parent = Frame
+    return obj
+end
+
+-- Элементы управления
+local SetBtn = createUIElement("TextButton", {
+    Size = UDim2.new(0.9, 0, 0, 26),
+    Position = UDim2.new(0.05, 0, 0.12, 0),
+    BackgroundColor3 = Color3.fromRGB(255, 140, 0),
+    Text = "1. Сохранить Финиш",
+    TextColor3 = Color3.fromRGB(255, 255, 255),
+    Font = Enum.Font.SourceSansBold,
+    TextSize = 12
+})
+
+local WinsInput = createUIElement("TextBox", {
+    Size = UDim2.new(0.9, 0, 0, 24),
+    Position = UDim2.new(0.05, 0, 0.25, 0),
+    BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+    Text = "10",
+    PlaceholderText = "Кол-во побед",
+    TextColor3 = Color3.fromRGB(255, 255, 255),
+    Font = Enum.Font.SourceSans,
+    TextSize = 12
+})
+
+local SpeedInput = createUIElement("TextBox", {
+    Size = UDim2.new(0.9, 0, 0, 24),
+    Position = UDim2.new(0.05, 0, 0.38, 0),
+    BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+    Text = "16",
+    PlaceholderText = "Скорость (WalkSpeed)",
+    TextColor3 = Color3.fromRGB(255, 255, 255),
+    Font = Enum.Font.SourceSans,
+    TextSize = 12
+})
+
+local JumpInput = createUIElement("TextBox", {
+    Size = UDim2.new(0.9, 0, 0, 24),
+    Position = UDim2.new(0.05, 0, 0.51, 0),
+    BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+    Text = "50",
+    PlaceholderText = "Прыжок (JumpPower)",
+    TextColor3 = Color3.fromRGB(255, 255, 255),
+    Font = Enum.Font.SourceSans,
+    TextSize = 12
+})
+
+local RebirthBtn = createUIElement("TextButton", {
+    Size = UDim2.new(0.9, 0, 0, 26),
+    Position = UDim2.new(0.05, 0, 0.64, 0),
+    BackgroundColor3 = Color3.fromRGB(100, 40, 180),
+    Text = "Авто-Реберт: ВЫКЛ",
+    TextColor3 = Color3.fromRGB(255, 255, 255),
+    Font = Enum.Font.SourceSansBold,
+    TextSize = 12
+})
+
+local ToggleBtn = createUIElement("TextButton", {
+    Size = UDim2.new(0.9, 0, 0, 30),
+    Position = UDim2.new(0.05, 0, 0.78, 0),
+    BackgroundColor3 = Color3.fromRGB(180, 40, 40),
+    Text = "Старт Фарм",
+    TextColor3 = Color3.fromRGB(255, 255, 255),
+    Font = Enum.Font.SourceSansBold,
+    TextSize = 13
+})
+
+local StatusLabel = createUIElement("TextLabel", {
+    Size = UDim2.new(0.9, 0, 0, 20),
+    Position = UDim2.new(0.05, 0, 0.90, 0),
+    BackgroundTransparency = 1,
+    Text = "Собрано: 0 / 10",
+    TextColor3 = Color3.fromRGB(180, 180, 180),
+    Font = Enum.Font.SourceSans,
+    TextSize = 11
+})
+
+local elementsToHide = {SetBtn, WinsInput, SpeedInput, JumpInput, RebirthBtn, ToggleBtn, StatusLabel}
+
+-- Логика сворачивания в маленький квадратик
+MinimizeBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    if isMinimized then
+        -- Сворачиваем в маленький квадрат (размером с верхнюю панель)
+        Frame.Size = UDim2.new(0, 100, 0, 24)
+        TitleLabel.Visible = false
+        MinimizeBtn.Size = UDim2.new(1, 0, 1, 0)
+        MinimizeBtn.Position = UDim2.new(0, 0, 0, 0)
+        MinimizeBtn.Text = "GUI"
+        MinimizeBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        for _, elem in ipairs(elementsToHide) do
+            elem.Visible = false
+        end
+    else
+        -- Разворачиваем обратно в большую панель
+        Frame.Size = UDim2.new(0, 160, 0, 275)
+        TitleLabel.Visible = true
+        MinimizeBtn.Size = UDim2.new(0, 24, 0, 24)
+        MinimizeBtn.Position = UDim2.new(1, -24, 0, 0)
+        MinimizeBtn.Text = "-"
+        MinimizeBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+        for _, elem in ipairs(elementsToHide) do
+            elem.Visible = true
+        end
+    end
+end)
+
+-- Обработка кнопок и полей
+SetBtn.MouseButton1Click:Connect(function()
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if root then
+        savedCFrame = root.CFrame
+        SetBtn.Text = "Финиш сохранен!"
+        SetBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
+        task.wait(1.5)
+        SetBtn.Text = "Обновить точку"
+    end
+end)
+
+WinsInput.FocusLost:Connect(function()
+    local num = tonumber(WinsInput.Text)
+    if num and num > 0 then targetWins = num else WinsInput.Text = tostring(targetWins) end
+end)
+
+SpeedInput.FocusLost:Connect(function()
+    local num = tonumber(SpeedInput.Text)
+    if num then customSpeed = num end
+end)
+
+JumpInput.FocusLost:Connect(function()
+    local num = tonumber(JumpInput.Text)
+    if num then customJump = num end
+end)
+
+RebirthBtn.MouseButton1Click:Connect(function()
+    rebirthActive = not rebirthActive
+    if rebirthActive then
+        RebirthBtn.Text = "Авто-Реберт: ВКЛ"
+        RebirthBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
+    else
+        RebirthBtn.Text = "Авто-Реберт: ВЫКЛ"
+        RebirthBtn.BackgroundColor3 = Color3.fromRGB(100, 40, 180)
+    end
+end)
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    if not savedCFrame and not farmActive then
+        ToggleBtn.Text = "Сохрани финиш!"
+        task.wait(1.2)
+        ToggleBtn.Text = "Старт Фарм"
+        return
+    end
+
+    farmActive = not farmActive
+    if farmActive then
+        startWins = getPlayerWins()
+        ToggleBtn.Text = "СТОП"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
+    else
+        ToggleBtn.Text = "Старт Фарм"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    end
+end)
+
+-- Основной цикл (Скорость, прыжок, фарм)
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        
+        local char = LocalPlayer.Character
+        if char then
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                pcall(function()
+                    humanoid.WalkSpeed = customSpeed
+                    if humanoid.UseJumpPower then
+                        humanoid.JumpPower = customJump
+                    else
+                        humanoid.JumpHeight = customJump / 5
+                    end
+                end)
+            end
+        end
+
+        if farmActive and savedCFrame then
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if root then
+                root.CFrame = savedCFrame
+                
+                local currentTotal = getPlayerWins()
+                local gained = currentTotal - startWins
+                if gained < 0 then gained = 0 end
+                
+                StatusLabel.Text = "Собрано: " .. gained + 1 .. " / " .. targetWins
+                
+                if gained >= targetWins then
+                    farmActive = false
+                    ToggleBtn.Text = "ГОТОВО!"
+                    ToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+                    task.wait(2)
+                    ToggleBtn.Text = "Старт Фарм"
+                end
+            end
+        end
+    end
+end)
+
+-- Цикл реберта
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if rebirthActive then
+            triggerRebirth()
+        end
+    end
+end)
